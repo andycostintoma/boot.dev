@@ -40,3 +40,18 @@ func handlerListFeedFollows(s *state, c command) error {
 	fmt.Printf("Following: %v\n", following)
 	return nil
 }
+
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <url>", cmd.Name)
+	}
+	url := cmd.Args[0]
+	err := s.db.DeleteFeedFollowsForUser(context.Background(), database.DeleteFeedFollowsForUserParams{
+		UserID: user.ID,
+		Url:    url,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
