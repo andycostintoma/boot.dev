@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/andycostintoma/blog-aggregator/internal/database"
+	"github.com/google/uuid"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -50,7 +52,26 @@ func scrapeFeed(db *database.Queries, feed database.Feed) {
 		return
 	}
 	for _, item := range feedData.Channel.Item {
-		fmt.Printf("Found post: %s\n", item.Title)
+		pubDate, err := time.Parse(time.RFC1123Z, item.PubDate)
+		if err != nil {
+			log.Printf("Couldn't parse date %s: %v", item.PubDate, err)
+			return
+		}
+
+		_, err = db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: pubDate,
+			FeedID:      feed.ID,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				continue
+			}
+			log.Printf("Couldn't create post: %v", err)
+			continue
+		}
 	}
-	log.Printf("Feed %s collected, %v posts found", feed.Name, len(feedData.Channel.Item))
 }
