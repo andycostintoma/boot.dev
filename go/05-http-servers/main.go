@@ -2,7 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"github.com/andycostintoma/http-servers/internal/database"
+	"github.com/andycostintoma/http-servers/db/generated"
+	"github.com/andycostintoma/http-servers/handlers"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"log"
@@ -11,54 +12,57 @@ import (
 	"sync/atomic"
 )
 
-type apiConfig struct {
-	fileserverHits atomic.Int32
-	db             *database.Queries
-	platform       string
-	secret         string
-}
-
 func main() {
-	const filepathRoot = "."
+	const filepathRoot = "static"
 	const port = "8080"
 
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Couldn't get env vars from .env")
+		log.Fatal("Couldn't load environment variables")
 	}
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
+	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is not set")
 	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Error opening database: %s", err)
 	}
-	dbQueries := database.New(dbConn)
+	dbQueries := generated.New(dbConn)
 
-	apiCfg := apiConfig{
-		fileserverHits: atomic.Int32{},
-		db:             dbQueries,
-		platform:       os.Getenv("PLATFORM"),
-		secret:         os.Getenv("SECRET"),
+	apiCfg := handlers.ApiConfig{
+		FileserverHits: atomic.Int32{},
+		Db:             dbQueries,
+		Platform:       platform,
+		JwtSecret:      jwtSecret,
 	}
 
 	mux := http.NewServeMux()
-	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
+	fsHandler := apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
 	mux.Handle("/app/", fsHandler)
 
-	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/health", handlers.HandlerReadiness)
 
-	mux.HandleFunc("GET /api/chirps", apiCfg.handlerGetChirps)
-	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleGetChirp)
-	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
+	mux.HandleFunc("GET /api/chirps", apiCfg.HandlerGetChirps)
+	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.HandleGetChirp)
+	mux.HandleFunc("POST /api/chirps", apiCfg.HandlerChirpsCreate)
 
-	mux.HandleFunc("POST /api/users", apiCfg.handlerUsersCreate)
-	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
+	mux.HandleFunc("POST /api/users", apiCfg.HandlerRegister)
+	mux.HandleFunc("POST /api/login", apiCfg.HandlerLogin)
+	mux.HandleFunc("POST /api/refresh", apiCfg.HandlerRefresh)
+	mux.HandleFunc("POST /api/revoke", apiCfg.HandlerRevoke)
 
-	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
-	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /admin/reset", apiCfg.HandlerReset)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.HandlerMetrics)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

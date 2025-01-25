@@ -2,9 +2,10 @@
 // versions:
 //   sqlc v1.27.0
 
-package database
+package generated
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,15 @@ type Chirp struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Body      string
+	UserID    uuid.UUID
+}
+
+type RefreshToken struct {
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
 	UserID    uuid.UUID
 }
 

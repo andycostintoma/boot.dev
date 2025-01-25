@@ -1,1 +1,1 @@
-goose -dir sql/schema postgres "postgres://postgres:postgres@localhost:5432/chirpy" up
+goose -dir db/sql/schema postgres "postgres://postgres:postgres@localhost:5432/chirpy" up

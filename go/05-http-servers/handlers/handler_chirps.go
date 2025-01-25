@@ -1,10 +1,11 @@
-package main
+package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/andycostintoma/http-servers/internal/auth"
-	"github.com/andycostintoma/http-servers/internal/database"
+	"github.com/andycostintoma/http-servers/auth"
+	"github.com/andycostintoma/http-servers/db/generated"
 	"net/http"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ type chirpResponse struct {
 	Body      string    `json:"body"`
 }
 
-func mapDbToJson(chirp database.Chirp) chirpResponse {
+func mapDbToResponse(chirp generated.Chirp) chirpResponse {
 	return chirpResponse{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
@@ -30,73 +31,83 @@ func mapDbToJson(chirp database.Chirp) chirpResponse {
 	}
 }
 
-func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Not a valid UUID", err)
+		respondAndLog(w, http.StatusBadRequest, "Not a valid UUID", err)
 		return
 	}
-	chirp, err := cfg.db.GetChirpById(r.Context(), id)
+	chirp, err := cfg.Db.GetChirpById(r.Context(), id)
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Couldn't get chirp", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			respondAndLog(w, http.StatusNotFound, "Chirp not found", err)
+		} else {
+			respondWithInternalServerError(w, err)
+		}
 		return
 	}
-	respondWithJSON(w, http.StatusOK, mapDbToJson(chirp))
+	respondWithJSON(w, http.StatusOK, mapDbToResponse(chirp))
 }
 
-func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
-	dbChirps, err := cfg.db.GetChirps(r.Context())
+func (cfg *ApiConfig) HandlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	dbChirps, err := cfg.Db.GetChirps(r.Context())
+	// TODO: maybe handle sql.ErrNoRows differently?
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get Chirps", err)
+		respondWithInternalServerError(w, err)
 		return
 	}
 	var response []chirpResponse
 	for _, chirp := range dbChirps {
-		response = append(response, mapDbToJson(chirp))
+		response = append(response, mapDbToResponse(chirp))
 	}
 	respondWithJSON(w, http.StatusOK, response)
 }
 
-func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiConfig) HandlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
 
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get bearer token", err)
+		respondAndLog(w, http.StatusBadRequest, "Couldn't get bearer token", err)
 		return
 	}
 
-	id, err := auth.ValidateJWT(token, cfg.secret)
+	id, err := auth.ValidateJWT(token, cfg.JwtSecret)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Couldn't validate token", err)
+		respondAndLog(w, http.StatusUnauthorized, "Couldn't validate token", err)
 		return
 	}
 
 	params := parameters{}
 	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		respondAndLog(w, http.StatusBadRequest, "Invalid requestBody body format", err)
+		return
+	}
+
+	if params.Body == "" {
+		respondAndLog(w, http.StatusBadRequest, "Chirp body cannot be empty", nil)
 		return
 	}
 
 	cleaned, err := validateChirp(params.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error(), err)
+		respondAndLog(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
-	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
+	chirp, err := cfg.Db.CreateChirp(r.Context(), generated.CreateChirpParams{
 		Body:   cleaned,
 		UserID: id,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create chirp", err)
+		respondWithInternalServerError(w, err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, mapDbToJson(chirp))
+	respondWithJSON(w, http.StatusCreated, mapDbToResponse(chirp))
 }
 
 func validateChirp(body string) (string, error) {
