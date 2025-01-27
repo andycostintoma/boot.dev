@@ -46,18 +46,19 @@ func main() {
 		JwtSecret:      jwtSecret,
 	}
 
-	mux := http.NewServeMux()
+	mux := NewAuthenticatedServeMux(jwtSecret)
 	fsHandler := apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
-	mux.Handle("/app/", fsHandler)
+	mux.HandleFunc("/app/", fsHandler.ServeHTTP)
 
 	mux.HandleFunc("GET /api/health", handlers.HandlerReadiness)
 
 	mux.HandleFunc("GET /api/chirps", apiCfg.HandlerGetChirps)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.HandleGetChirp)
-	mux.HandleFunc("POST /api/chirps", apiCfg.HandlerChirpsCreate)
+	mux.HandleAuthenticated("POST /api/chirps", apiCfg.HandlerChirpsCreate)
+	mux.HandleAuthenticated("DELETE /api/chirps/{id}", apiCfg.HandlerDeleteChirp)
 
 	mux.HandleFunc("POST /api/users", apiCfg.HandlerRegister)
-	mux.HandleFunc("PUT /api/users", apiCfg.HandlerEditUser)
+	mux.HandleAuthenticated("PUT /api/users", apiCfg.HandlerEditUser)
 	mux.HandleFunc("POST /api/login", apiCfg.HandlerLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.HandlerRefresh)
 	mux.HandleFunc("POST /api/revoke", apiCfg.HandlerRevoke)

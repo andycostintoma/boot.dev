@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/andycostintoma/http-servers/auth"
 	"github.com/andycostintoma/http-servers/db/generated"
 	"net/http"
 	"strings"
@@ -63,25 +62,12 @@ func (cfg *ApiConfig) HandlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, response)
 }
 
-func (cfg *ApiConfig) HandlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
+func (cfg *ApiConfig) HandlerChirpsCreate(w http.ResponseWriter, r *http.Request, userId uuid.UUID) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
-
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondAndLog(w, http.StatusBadRequest, "Couldn't get bearer token", err)
-		return
-	}
-
-	id, err := auth.ValidateJWT(token, cfg.JwtSecret)
-	if err != nil {
-		respondAndLog(w, http.StatusUnauthorized, "Couldn't validate token", err)
-		return
-	}
-
 	params := parameters{}
-	err = json.NewDecoder(r.Body).Decode(&params)
+	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
 		respondAndLog(w, http.StatusBadRequest, "Invalid requestBody body format", err)
 		return
@@ -100,7 +86,7 @@ func (cfg *ApiConfig) HandlerChirpsCreate(w http.ResponseWriter, r *http.Request
 
 	chirp, err := cfg.Db.CreateChirp(r.Context(), generated.CreateChirpParams{
 		Body:   cleaned,
-		UserID: id,
+		UserID: userId,
 	})
 	if err != nil {
 		respondWithInternalServerError(w, err)
@@ -135,4 +121,31 @@ func getCleanedBody(body string, badWords map[string]struct{}) string {
 	}
 	cleaned := strings.Join(words, " ")
 	return cleaned
+}
+
+func (cfg *ApiConfig) HandlerDeleteChirp(w http.ResponseWriter, r *http.Request, userId uuid.UUID) {
+	chirpId, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		respondAndLog(w, http.StatusBadRequest, "Not a valid UUID", err)
+		return
+	}
+	chirp, err := cfg.Db.GetChirpById(r.Context(), chirpId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondAndLog(w, http.StatusNotFound, "Chirp not found", err)
+		} else {
+			respondWithInternalServerError(w, err)
+		}
+		return
+	}
+	if chirp.UserID != userId {
+		respondAndLog(w, http.StatusForbidden, "Forbidden", nil)
+		return
+	}
+	err = cfg.Db.DeleteChirp(r.Context(), chirpId)
+	if err != nil {
+		respondWithInternalServerError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

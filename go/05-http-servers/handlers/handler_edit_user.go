@@ -8,18 +8,7 @@ import (
 	"net/http"
 )
 
-func (cfg *ApiConfig) HandlerEditUser(w http.ResponseWriter, r *http.Request) {
-	token, err := auth.GetBearerToken(r.Header)
-	if err != nil {
-		respondAndLog(w, http.StatusUnauthorized, "Couldn't get bearer token", err)
-		return
-	}
-
-	id, err := auth.ValidateJWT(token, cfg.JwtSecret)
-	if err != nil {
-		respondAndLog(w, http.StatusUnauthorized, "Couldn't validate token", err)
-		return
-	}
+func (cfg *ApiConfig) HandlerEditUser(w http.ResponseWriter, r *http.Request, userId uuid.UUID) {
 
 	type RequestBody struct {
 		Email    string `json:"email"`
@@ -27,7 +16,7 @@ func (cfg *ApiConfig) HandlerEditUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestBody := RequestBody{}
-	err = json.NewDecoder(r.Body).Decode(&requestBody)
+	err := json.NewDecoder(r.Body).Decode(&requestBody)
 	if err != nil {
 		respondAndLog(w, http.StatusBadRequest, "Invalid requestBody body", err)
 		return
@@ -40,7 +29,7 @@ func (cfg *ApiConfig) HandlerEditUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedUser, err := cfg.Db.UpdateUser(r.Context(), generated.UpdateUserParams{
-		ID:             id,
+		ID:             userId,
 		Email:          requestBody.Email,
 		HashedPassword: hashedPassword,
 	})
