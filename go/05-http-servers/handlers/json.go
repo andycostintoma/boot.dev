@@ -4,18 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"runtime"
 )
-
-func logErrorWithStackTrace(err error) {
-	stackTrace := make([]byte, 1024)
-	n := runtime.Stack(stackTrace, false)
-	log.Printf("Error: %s\nStack Trace: %s\n", err, stackTrace[:n])
-}
 
 func respondAndLog(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
-		logErrorWithStackTrace(err)
+		log.Println(err)
 	}
 	type errorResponse struct {
 		Error string `json:"error"`
