@@ -10,4 +10,5 @@ type ApiConfig struct {
 	Db             *generated.Queries
 	Platform       string
 	JwtSecret      string
+	PolkaKey       string
 }

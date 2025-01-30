@@ -80,6 +80,14 @@ func GetBearerToken(headers http.Header) (string, error) {
 	return strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer")), nil
 }
 
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("couldn't get authorization header")
+	}
+	return strings.TrimSpace(strings.TrimPrefix(authHeader, "ApiKey")), nil
+}
+
 func MakeRefreshToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {

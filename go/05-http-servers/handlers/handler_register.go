@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-
 	"github.com/andycostintoma/http-servers/auth"
 	"github.com/andycostintoma/http-servers/db/generated"
 	"net/http"
@@ -38,16 +37,18 @@ func (cfg *ApiConfig) HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type responseBody struct {
-		Id        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
+		Id          uuid.UUID `json:"id"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+		Email       string    `json:"email"`
+		IsChirpyRed bool      `json:"is_chirpy_red"`
 	}
 
 	respondWithJSON(w, http.StatusCreated, responseBody{
-		Id:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		Id:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	})
 }

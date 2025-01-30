@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"github.com/andycostintoma/http-servers/db/generated"
-	"github.com/andycostintoma/http-servers/handlers"
+	handlers2 "github.com/andycostintoma/http-servers/handlers"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"log"
@@ -32,6 +32,10 @@ func main() {
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is not set")
 	}
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY environment variable is not set")
+	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -39,18 +43,19 @@ func main() {
 	}
 	dbQueries := generated.New(dbConn)
 
-	apiCfg := handlers.ApiConfig{
+	apiCfg := handlers2.ApiConfig{
 		FileserverHits: atomic.Int32{},
 		Db:             dbQueries,
 		Platform:       platform,
 		JwtSecret:      jwtSecret,
+		PolkaKey:       polkaKey,
 	}
 
 	mux := NewAuthenticatedServeMux(jwtSecret)
 	fsHandler := apiCfg.MiddlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
 	mux.HandleFunc("/app/", fsHandler.ServeHTTP)
 
-	mux.HandleFunc("GET /api/health", handlers.HandlerReadiness)
+	mux.HandleFunc("GET /api/health", handlers2.HandlerReadiness)
 
 	mux.HandleFunc("GET /api/chirps", apiCfg.HandlerGetChirps)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.HandleGetChirp)
@@ -62,6 +67,8 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.HandlerLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.HandlerRefresh)
 	mux.HandleFunc("POST /api/revoke", apiCfg.HandlerRevoke)
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.HandlerWebhook)
 
 	mux.HandleFunc("POST /admin/reset", apiCfg.HandlerReset)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.HandlerMetrics)
